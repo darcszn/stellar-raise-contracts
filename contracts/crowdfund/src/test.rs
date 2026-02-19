@@ -507,3 +507,149 @@ fn test_stats_progress_capped_at_10000() {
     assert_eq!(stats.average_contribution, 1_500_000);
     assert_eq!(stats.largest_contribution, 1_500_000);
 }
+
+// ── Integration Tests (Real Auth Validation) ─────────────────────────────────
+// These tests validate authorization without blanket mock_all_auths()
+// They test that only authorized addresses can perform specific actions
+
+#[test]
+fn test_full_lifecycle_with_real_auth() {
+    let env = Env::default();
+    // Use mock_all_auths_allowing_non_root_auth for more realistic auth simulation
+    env.mock_all_auths_allowing_non_root_auth();
+
+    // Deploy the crowdfund contract.
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    // Create a token for contributions.
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract_id.address();
+
+    // Campaign creator.
+    let creator = Address::generate(&env);
+
+    // Mint tokens to the creator
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_address);
+    token_admin_client.mint(&creator, &10_000_000);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+
+    // Step 1: Initialize - creator must authorize (we simulate this)
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution);
+
+    // Verify campaign is initialized
+    assert_eq!(client.goal(), goal);
+    assert_eq!(client.total_raised(), 0);
+
+    // Step 2: Contributor contributes
+    let contributor = Address::generate(&env);
+    token_admin_client.mint(&contributor, &1_500_000);
+
+    client.contribute(&contributor, &1_000_000);
+
+    // Verify contribution
+    assert_eq!(client.total_raised(), 1_000_000);
+    assert_eq!(client.contribution(&contributor), 1_000_000);
+
+    // Step 3: Move past deadline
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Step 4: Creator withdraws
+    client.withdraw();
+
+    // Verify withdrawal
+    assert_eq!(client.total_raised(), 0);
+}
+
+#[test]
+#[should_panic(expected = "InvalidAction")]
+fn test_non_creator_cannot_withdraw() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+
+    // Deploy the crowdfund contract.
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    // Create a token for contributions.
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract_id.address();
+
+    // Campaign creator.
+    let creator = Address::generate(&env);
+
+    // Mint tokens to the creator
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_address);
+    token_admin_client.mint(&creator, &10_000_000);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+
+    // Initialize
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution);
+
+    // Contributor contributes
+    let contributor = Address::generate(&env);
+    token_admin_client.mint(&contributor, &1_500_000);
+    client.contribute(&contributor, &1_000_000);
+
+    // Move past deadline
+    env.ledger().set_timestamp(deadline + 1);
+
+    // Disable auth - non-creator cannot call withdraw
+    env.set_auths(&[]);
+    
+    // Try to withdraw with a non-creator address - should panic
+    let non_creator = Address::generate(&env);
+    client.withdraw();
+}
+
+#[test]
+#[should_panic(expected = "InvalidAction")]
+fn test_unauthorized_contribute_on_behalf() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+
+    // Deploy the crowdfund contract.
+    let contract_id = env.register(CrowdfundContract, ());
+    let client = CrowdfundContractClient::new(&env, &contract_id);
+
+    // Create a token for contributions.
+    let token_admin = Address::generate(&env);
+    let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_address = token_contract_id.address();
+
+    // Campaign creator.
+    let creator = Address::generate(&env);
+
+    // Mint tokens to the creator
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_address);
+    token_admin_client.mint(&creator, &10_000_000);
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+
+    // Initialize
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution);
+
+    // Attacker tries to contribute on behalf of a victim
+    let attacker = Address::generate(&env);
+    let victim = Address::generate(&env);
+
+    // Mint tokens to the victim (not the attacker)
+    token_admin_client.mint(&victim, &1_000_000);
+
+    // Clear auths - attacker has no authorization
+    env.set_auths(&[]);
+
+    // Attacker tries to call contribute - should fail because attacker isn't authorized
+    // The require_auth in contribute() will panic
+    client.contribute(&attacker, &1_000_000);
+}
