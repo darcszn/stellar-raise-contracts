@@ -2,7 +2,10 @@ name: Testnet Smoke Test
 on:
   workflow_dispatch: # manual trigger
   schedule:
-    - cron: '0 2 * * *' # nightly at 02:00 UTC
+    - cron: 0 2 * * * # nightly at 02:00 UTC
+
+permissions:
+  contents: read
 
 jobs:
   smoke-test:
@@ -11,19 +14,19 @@ jobs:
 
     env:
       NETWORK: testnet
-      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      NETWORK_PASSPHRASE: Test SDF Network ; September 2015
       RPC_URL: https://soroban-testnet.stellar.org
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust and wasm32 target
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          override: true
+          targets: wasm32-unknown-unknown
 
       - name: Install soroban-cli
         run: cargo install soroban-cli
