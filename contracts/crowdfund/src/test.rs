@@ -409,3 +409,101 @@ fn test_contribute_above_minimum() {
     assert_eq!(client.total_raised(), 50_000);
     assert_eq!(client.contribution(&contributor), 50_000);
 }
+
+// ── Campaign Stats Tests ───────────────────────────────────────────────────
+
+#[test]
+fn test_stats_no_contributions() {
+    let (env, client, creator, token_address, _admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution);
+
+    let stats = client.get_stats();
+
+    assert_eq!(stats.total_raised, 0);
+    assert_eq!(stats.goal, 1_000_000);
+    assert_eq!(stats.progress_bps, 0);
+    assert_eq!(stats.contributor_count, 0);
+    assert_eq!(stats.average_contribution, 0);
+    assert_eq!(stats.largest_contribution, 0);
+}
+
+#[test]
+fn test_stats_single_contributor() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution);
+
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 500_000);
+    client.contribute(&contributor, &500_000);
+
+    let stats = client.get_stats();
+
+    assert_eq!(stats.total_raised, 500_000);
+    assert_eq!(stats.goal, 1_000_000);
+    assert_eq!(stats.progress_bps, 5_000); // 50%
+    assert_eq!(stats.contributor_count, 1);
+    assert_eq!(stats.average_contribution, 500_000);
+    assert_eq!(stats.largest_contribution, 500_000);
+}
+
+#[test]
+fn test_stats_multiple_contributors() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution);
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    let charlie = Address::generate(&env);
+    
+    mint_to(&env, &token_address, &admin, &alice, 600_000);
+    mint_to(&env, &token_address, &admin, &bob, 300_000);
+    mint_to(&env, &token_address, &admin, &charlie, 100_000);
+
+    client.contribute(&alice, &600_000);
+    client.contribute(&bob, &300_000);
+    client.contribute(&charlie, &100_000);
+
+    let stats = client.get_stats();
+
+    assert_eq!(stats.total_raised, 1_000_000);
+    assert_eq!(stats.goal, 1_000_000);
+    assert_eq!(stats.progress_bps, 10_000); // 100%
+    assert_eq!(stats.contributor_count, 3);
+    assert_eq!(stats.average_contribution, 333_333); // 1_000_000 / 3
+    assert_eq!(stats.largest_contribution, 600_000);
+}
+
+#[test]
+fn test_stats_progress_capped_at_10000() {
+    let (env, client, creator, token_address, admin) = setup_env();
+
+    let deadline = env.ledger().timestamp() + 3600;
+    let goal: i128 = 1_000_000;
+    let min_contribution: i128 = 1_000;
+    client.initialize(&creator, &token_address, &goal, &deadline, &min_contribution);
+
+    let contributor = Address::generate(&env);
+    mint_to(&env, &token_address, &admin, &contributor, 1_500_000);
+    client.contribute(&contributor, &1_500_000);
+
+    let stats = client.get_stats();
+
+    assert_eq!(stats.total_raised, 1_500_000);
+    assert_eq!(stats.goal, 1_000_000);
+    assert_eq!(stats.progress_bps, 10_000); // Capped at 100%
+    assert_eq!(stats.contributor_count, 1);
+    assert_eq!(stats.average_contribution, 1_500_000);
+    assert_eq!(stats.largest_contribution, 1_500_000);
+}
