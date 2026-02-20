@@ -74,6 +74,8 @@ fn test_withdraw_only_creator_can_withdraw() {
         &goal,
         &deadline,
         &min_contribution,
+        &None,
+        &None,
     );
 
     // Create a contributor and make a contribution
@@ -120,6 +122,8 @@ fn test_contribute_requires_own_auth() {
         &goal,
         &deadline,
         &min_contribution,
+        &None,
+        &None,
     );
 
     // Test contribution with proper authorization
@@ -160,6 +164,8 @@ fn test_initialize_requires_creator_auth() {
         &goal,
         &deadline,
         &min_contribution,
+        &None,
+        &None,
     );
 
     // Verify initialization was successful
