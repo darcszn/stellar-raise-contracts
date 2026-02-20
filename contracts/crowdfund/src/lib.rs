@@ -392,6 +392,53 @@ impl CrowdfundContract {
         env.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 
+    /// Update campaign metadata — only callable by the creator while the
+    /// campaign is still Active.
+    ///
+    /// # Arguments
+    /// * `creator`     – The campaign creator's address (for authentication).
+    /// * `title`       – Optional new title (None to keep existing).
+    /// * `description` – Optional new description (None to keep existing).
+    /// * `socials`    – Optional new social links (None to keep existing).
+    pub fn update_metadata(env: Env, creator: Address, title: Option<String>, description: Option<String>, socials: Option<String>) {
+        // Check campaign is active.
+        let status: Status = env.storage().instance().get(&DataKey::Status).unwrap();
+        if status != Status::Active {
+            panic!("campaign is not active");
+        }
+
+        // Require creator authentication and verify caller is the creator.
+        let stored_creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
+        if creator != stored_creator {
+            panic!("not authorized");
+        }
+        creator.require_auth();
+
+        // Track which fields were updated for the event.
+        let mut updated_fields: Vec<Symbol> = Vec::new(&env);
+
+        // Update title if provided.
+        if let Some(new_title) = title {
+            env.storage().instance().set(&DataKey::Title, &new_title);
+            updated_fields.push_back(Symbol::new(&env, "title"));
+        }
+
+        // Update description if provided.
+        if let Some(new_description) = description {
+            env.storage().instance().set(&DataKey::Description, &new_description);
+            updated_fields.push_back(Symbol::new(&env, "description"));
+        }
+
+        // Update social links if provided.
+        if let Some(new_socials) = socials {
+            env.storage().instance().set(&DataKey::SocialLinks, &new_socials);
+            updated_fields.push_back(Symbol::new(&env, "socials"));
+        }
+
+        // Emit metadata_updated event with the list of updated field names.
+        env.events().publish((Symbol::new(&env, "campaign"), Symbol::new(&env, "metadata_updated")), updated_fields);
+    }
+
     // ── View helpers ────────────────────────────────────────────────────
 
     /// Add a roadmap item to the campaign timeline.
@@ -522,5 +569,32 @@ impl CrowdfundContract {
             average_contribution,
             largest_contribution,
         }
+    }
+
+    /// Returns the campaign title.
+    pub fn title(env: Env) -> String {
+        let empty = String::from(&String::from_slice(&env, ""));
+        env.storage()
+            .instance()
+            .get(&DataKey::Title)
+            .unwrap_or(empty)
+    }
+
+    /// Returns the campaign description.
+    pub fn description(env: Env) -> String {
+        let empty = String::from(&String::from_slice(&env, ""));
+        env.storage()
+            .instance()
+            .get(&DataKey::Description)
+            .unwrap_or(empty)
+    }
+
+    /// Returns the campaign social links.
+    pub fn socials(env: Env) -> String {
+        let empty = String::from(&String::from_slice(&env, ""));
+        env.storage()
+            .instance()
+            .get(&DataKey::SocialLinks)
+            .unwrap_or(empty)
     }
 }
