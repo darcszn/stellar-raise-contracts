@@ -1,5 +1,5 @@
 #![no_std]
-#![allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, token, Address, Env, String,
@@ -47,8 +47,9 @@ use withdraw_event_emission::{emit_withdrawal_event, mint_nfts_in_batch};
 #[cfg(test)]
 mod withdraw_event_emission_test;
 
+#[cfg(test)]
 #[path = "stellar_token_minter_test.rs"]
-mod stellar_token_minter_test;
+mod stellar_token_minter_test_original;
 
 // --- Tests ---
 #[cfg(test)]
@@ -77,7 +78,8 @@ mod proptest_generator_boundary;
 mod proptest_generator_boundary_tests;
 pub mod stellar_token_minter;
 #[cfg(test)]
-mod stellar_token_minter_test;
+#[path = "stellar_token_minter.test.rs"]
+mod stellar_token_minter_test_comprehensive;
 #[cfg(test)]
 #[path = "admin_upgrade_mechanism.test.rs"]
 mod admin_upgrade_mechanism_test;
@@ -749,10 +751,6 @@ impl CrowdfundContract {
 
     /// * `refund_single_transfer` helper skips amount <= 0 (gas optimization).
     /// * Debug event emitted before transfer for monitoring.
-
-    pub fn refund_single(env: Env, contributor: Address) -> Result<(), ContractError> {
-        contributor.require_auth();
-
 
     /// Claim a refund for a single contributor (pull-based).
     ///
