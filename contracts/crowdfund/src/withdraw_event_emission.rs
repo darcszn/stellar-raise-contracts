@@ -1,4 +1,4 @@
-//! Optimized `withdraw()` Event Emission Module
+//! Bounded `withdraw()` Event Emission Module
 //!
 //! Centralises all event publishing for the `withdraw()` function.
 //! Three validated helpers replace scattered inline `env.events().publish()`
